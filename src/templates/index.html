@@ -213,8 +213,20 @@
         if (!file) { await loadLocal(account); document.getElementById('tabResumen').click(); return; }
         const fd = new FormData(); fd.append('file', file); if (account) fd.append('account', account);
         const resp = await fetch('/retornos', { method: 'POST', body: fd });
-        if (!resp.ok) { alert('Error: ' + resp.statusText); return; }
-        const data = await resp.json(); processResponseData(data); document.getElementById('tabResumen').click();
+        const text = await resp.text();
+        if (!resp.ok) {
+            try {
+                const j = JSON.parse(text);
+                console.error('Upload error', j);
+                alert('Error procesando archivo: ' + (j.detail || JSON.stringify(j)));
+            } catch (ee) {
+                console.error('Upload error', text);
+                alert('Error procesando archivo: ' + text);
+            }
+            return;
+        }
+        const data = JSON.parse(text);
+        processResponseData(data); document.getElementById('tabResumen').click();
     });
 
     // clear
