@@ -5,8 +5,8 @@ from fastapi.templating import Jinja2Templates
 from typing import Optional
 import uvicorn
 from pathlib import Path
-from processing import process_retornos_csv
-from visuals import generate_informe_images
+from src.processing import process_retornos_csv
+from src.visuals import generate_informe_images
 
 BASE_DIR = Path(__file__).resolve().parent
 
