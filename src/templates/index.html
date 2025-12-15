@@ -96,8 +96,19 @@
     async function loadLocal(account=''){
         const q = account ? `?account=${encodeURIComponent(account)}` : '';
         const resp = await fetch('/retornos/local' + q, { method: 'GET' });
-        if (!resp.ok) { console.error('Error loading local', resp.statusText); return; }
-        const data = await resp.json();
+        const text = await resp.text();
+        if (!resp.ok) {
+            try {
+                const j = JSON.parse(text);
+                console.error('Error loading local', j);
+                alert('Error loading local: ' + (j.detail || JSON.stringify(j)));
+            } catch(e) {
+                console.error('Error loading local', text);
+                alert('Error loading local: ' + text);
+            }
+            return;
+        }
+        const data = JSON.parse(text);
         processResponseData(data);
     }
 
