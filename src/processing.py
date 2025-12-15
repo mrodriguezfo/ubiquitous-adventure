@@ -160,4 +160,42 @@ def process_retornos_csv(contents: bytes, account: Optional[str] = None) -> List
             r[col if isinstance(col, str) else str(col)] = v
         results.append(r)
 
-    return {'rows': results, 'count': len(results), 'informe': summaries, 'snapshots': snapshots}
+    # Sanitize outputs: convert NaN/inf to None and convert numpy/pandas types to native Python
+    import math
+    def _clean(v):
+        # pandas NA / numpy nan -> None
+        try:
+            if pd.isna(v):
+                return None
+        except Exception:
+            pass
+        if isinstance(v, (pd.Timestamp, datetime.datetime)):
+            return v.strftime('%Y-%m-%d')
+        if isinstance(v, datetime.date):
+            return v.strftime('%Y-%m-%d')
+        if isinstance(v, (int, float)):
+            # reject NaN/inf
+            if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                return None
+            return float(v) if isinstance(v, (int, float)) else v
+        return v
+
+    # clean summaries
+    clean_summaries = []
+    for s in summaries:
+        cs = {k: _clean(v) for k, v in s.items()}
+        clean_summaries.append(cs)
+
+    # clean snapshots
+    clean_snapshots = []
+    for s in snapshots:
+        cs = {k: _clean(v) for k, v in s.items()}
+        clean_snapshots.append(cs)
+
+    # rows already converted but ensure types cleaned
+    clean_results = []
+    for r in results:
+        cr = {k: _clean(v) for k, v in r.items()}
+        clean_results.append(cr)
+
+    return {'rows': clean_results, 'count': len(clean_results), 'informe': clean_summaries, 'snapshots': clean_snapshots}
