@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Retornos - Panel FLAR</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header class="header">
+        <div class="brand">
+            <div class="logo">FL</div>
+            <div>
+                <h1>FLAR - Retornos</h1>
+                <div class="meta">Reporte diario de retornos y valor de mercado</div>
+            </div>
+        </div>
+        <div class="meta">Usuario: Demo &nbsp; | &nbsp; Fecha: <span id="now">--</span></div>
+    </header>
+
+    <main class="container">
+        <div class="grid">
+            <section>
+                <div class="card" style="display:none">
+                    <h2>Subir archivo RetornosV21.csv</h2>
+                    <p class="hint">Sube el archivo exportado por el sistema. La transformación reproduce la hoja PowerQuery: salta 5 filas y promueve encabezados.</p>
+                    <form id="uploadForm" class="uploader" enctype="multipart/form-data">
+                        <!-- File upload hidden for prototype: using server-side CSV -->
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <label style="font-weight:600;color:#33475b">Usando CSV local del servidor (prototipo)</label>
+                            <input type="text" name="account" id="accountInput" placeholder="Filtrar por Account (opcional)" />
+                        </div>
+                        <div class="actions">
+                            <button class="btn" type="submit">Procesar</button>
+                            <button type="button" class="btn secondary" id="clearBtn">Limpiar</button>
+                            <button type="button" class="btn" id="downloadImgs">Descargar Imágenes</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card" style="margin-top:16px">
+                    <div class="informe-title"><h3>Resultados</h3><div id="summary"></div></div>
+                    <div id="informe-wrap"></div>
+                    <div id="table-wrap" class="results-table-wrapper"></div>
+                    <div id="images-wrap"></div>
+                </div>
+            </section>
+
+            <aside>
+                <div class="card">
+                    <h3>KPIs</h3>
+                    <div class="summary">
+                        <div class="kpi"><h3>Total Portafolios</h3><p id="kpi-count">-</p></div>
+                        <div class="kpi"><h3>TWRR Avg</h3><p id="kpi-twrr">-</p></div>
+                    </div>
+                    <hr/>
+                    <h4>Instrucciones</h4>
+                    <ol>
+                        <li>Cargar el archivo RetornosV21.csv</li>
+                        <li>Opcional: filtrar por Account</li>
+                        <li>Revisar informe y descargar imágenes</li>
+                    </ol>
+                </div>
+
+                <div class="card" style="margin-top:16px">
+                    <h4>Ayuda rápida</h4>
+                    <p style="font-size:13px;color:#6b7a93">Si el archivo no se procesa, revisa que no tenga protección o que sea CSV plano. Contacta al equipo si necesitas asistencia.</p>
+                </div>
+            </aside>
+        </div>
+    </main>
+
+    <footer class="footer">FLAR - Aplicación interna de reportes. Diseñado para uso corporativo.</footer>
+
+    <script>
+    document.getElementById('now').innerText = new Date().toLocaleString();
+    const clearBtn = document.getElementById('clearBtn');
+    clearBtn.addEventListener('click', () => {
+        document.getElementById('fileInput').value = null;
+        document.getElementById('accountInput').value = '';
+        document.getElementById('summary').innerText = '';
+        document.getElementById('table-wrap').innerHTML = '';
+        document.getElementById('informe-wrap').innerHTML = '';
+        document.getElementById('images-wrap').innerHTML = '';
+        document.getElementById('kpi-count').innerText = '-';
+        document.getElementById('kpi-twrr').innerText = '-';
+    });
+
+    const form = document.getElementById('uploadForm');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const file = document.getElementById('fileInput').files[0];
+        const account = document.getElementById('accountInput').value;
+        let resp;
+        // Prototype behavior: if user didn't upload a file, use server-side local CSV
+        if (!file) {
+            const q = account ? `?account=${encodeURIComponent(account)}` : '';
+            resp = await fetch('/retornos/local' + q, { method: 'GET' });
+        } else {
+            const fd = new FormData();
+            fd.append('file', file);
+            if (account) fd.append('account', account);
+            resp = await fetch('/retornos', { method: 'POST', body: fd });
+        }
+        if (!resp.ok) {
+            alert('Error: ' + resp.statusText);
+            return;
+        }
+        const data = await resp.json();
+        document.getElementById('summary').innerText = `Filas: ${data.count}`;
+        document.getElementById('kpi-count').innerText = data.count;
+
+        const rows = data.rows || [];
+        const informe = data.informe || [];
+
+        // mostrar informe
+        if (informe.length > 0) {
+            let infHtml = '<h3>Informe</h3><table class="results"><thead><tr><th>Account</th><th>Date</th><th>Total Market Value</th><th>Total Earnings</th><th>TWRR</th></tr></thead><tbody>';
+            for (const r of informe) {
+                infHtml += `<tr><td>${r.Account}</td><td>${r.Date}</td><td>${r['Total Market Value'] ?? ''}</td><td>${r['Total Earnings'] ?? ''}</td><td>${r.TWRR ?? ''}</td></tr>`;
+            }
+            infHtml += '</tbody></table>';
+            document.getElementById('informe-wrap').innerHTML = infHtml;
+        } else {
+            document.getElementById('informe-wrap').innerHTML = '';
+        }
+
+        if (rows.length === 0) {
+            document.getElementById('table-wrap').innerHTML = '<p>No hay filas</p>';
+            document.getElementById('kpi-twrr').innerText = '-';
+            return;
+        }
+        // Build table
+        const cols = Object.keys(rows[0]);
+        let html = '<table class="results"><thead><tr>' + cols.map(c => `<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+        for (const r of rows) {
+            html += '<tr>' + cols.map(c => `<td>${r[c] ?? ''}</td>`).join('') + '</tr>';
+        }
+        html += '</tbody></table>';
+        document.getElementById('table-wrap').innerHTML = html;
+
+        // Calculate TWRR KPI
+        if (cols.includes('TWRR')) {
+            const twrrVals = rows.map(r => parseFloat(r['TWRR']) ).filter(v => !isNaN(v));
+            if (twrrVals.length > 0) {
+                const avg = (twrrVals.reduce((a,b)=>a+b,0)/twrrVals.length).toFixed(6);
+                document.getElementById('kpi-twrr').innerText = avg;
+            }
+        }
+
+        // Mostrar imágenes generadas (informe)
+        const images = data.images || [];
+        if (images.length > 0) {
+            let imgsHtml = '';
+            for (const p of images) {
+                imgsHtml += `<div style="margin-top:12px"><img src="${p}" style="width:100%;height:auto;border-radius:8px;box-shadow:0 6px 18px rgba(11,45,97,0.08)"/></div>`;
+            }
+            document.getElementById('images-wrap').innerHTML = imgsHtml;
+        } else {
+            document.getElementById('images-wrap').innerHTML = '';
+        }
+    });
+
+    // Download images button
+    document.getElementById('downloadImgs').addEventListener('click', () => {
+        const imgs = Array.from(document.querySelectorAll('#images-wrap img')).map(i => i.src);
+        if (imgs.length === 0) return alert('No hay imágenes para descargar');
+        imgs.forEach(src => {
+            const a = document.createElement('a');
+            a.href = src;
+            a.download = src.split('/').pop();
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        });
+    });
+
+    </script>
+</body>
+</html>
