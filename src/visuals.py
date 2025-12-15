@@ -62,3 +62,36 @@ def generate_informe_images(informe: List[Dict[str, Any]]) -> List[str]:
     paths.append('/static/' + os.path.basename(out_path2))
 
     return paths
+
+
+def generate_snapshots_image(snapshots: List[Dict[str, Any]]) -> List[str]:
+    """Genera una imagen tipo tabla con los snapshots de mercado (prev month end y last).
+
+    Devuelve lista con la ruta relativa a /static.
+    """
+    if not snapshots:
+        return []
+    ts = int(time.time() * 1000)
+    cols = ['Account', 'PrevMonthEnd', 'PrevMarketValue', 'LastDate', 'LastMarketValue', 'Diff', 'PctDiff']
+    table_data = []
+    for s in snapshots:
+        table_data.append([
+            s.get('Account', ''),
+            s.get('PrevMonthEnd', ''),
+            '' if s.get('PrevMarketValue') is None else f"{s.get('PrevMarketValue'):,}",
+            s.get('LastDate', ''),
+            '' if s.get('LastMarketValue') is None else f"{s.get('LastMarketValue'):,}",
+            '' if s.get('Diff') is None else f"{s.get('Diff'):,}",
+            '' if s.get('PctDiff') is None else f"{s.get('PctDiff'):.2f}%",
+        ])
+    fig, ax = plt.subplots(figsize=(12, max(1, 0.5 * len(table_data))))
+    ax.axis('off')
+    table = ax.table(cellText=table_data, colLabels=cols, loc='center', cellLoc='right')
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    table.scale(1, 1.1)
+    out_path = os.path.join(STATIC_DIR, f'gen_snapshots_table_{ts}.png')
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    return ['/static/' + os.path.basename(out_path)]

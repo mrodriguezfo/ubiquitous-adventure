@@ -77,6 +77,70 @@ def process_retornos_csv(contents: bytes, account: Optional[str] = None) -> List
                 'TWRR': float(latest_row['TWRR']) if 'TWRR' in g.columns else None,
             })
 
+    # Market value snapshots: end of previous month (relative to overall latest date) and last available date
+    snapshots = []
+    if 'End Date' in df.columns and 'Total Market Value' in df.columns and len(df) > 0:
+        overall_last = df['End Date'].max()
+        if not pd.isnull(overall_last):
+            # previous month end relative to overall_last
+            first_of_month = overall_last.replace(day=1)
+            prev_month_end = first_of_month - pd.Timedelta(days=1)
+
+            total_prev = 0.0
+            total_last = 0.0
+            for acct, g in df.groupby('Account'):
+                # value at or before prev_month_end
+                g_sorted = g.sort_values('End Date')
+                prev_rows = g_sorted[g_sorted['End Date'] <= prev_month_end]
+                if not prev_rows.empty:
+                    prev_val = float(prev_rows.iloc[-1]['Total Market Value']) if not pd.isnull(prev_rows.iloc[-1]['Total Market Value']) else None
+                    prev_date = prev_rows.iloc[-1]['End Date']
+                else:
+                    prev_val = None
+                    prev_date = None
+
+                last_row = g_sorted.iloc[-1]
+                last_val = float(last_row['Total Market Value']) if not pd.isnull(last_row['Total Market Value']) else None
+                last_date = last_row['End Date']
+
+                diff = None
+                pct = None
+                if prev_val is not None and last_val is not None:
+                    try:
+                        diff = last_val - prev_val
+                        pct = (diff / prev_val) * 100 if prev_val != 0 else None
+                    except Exception:
+                        diff = None
+                        pct = None
+
+                snapshots.append({
+                    'Account': acct,
+                    'PrevMonthEnd': prev_month_end.strftime('%Y-%m-%d'),
+                    'PrevDate': prev_date.strftime('%Y-%m-%d') if prev_date is not None else None,
+                    'PrevMarketValue': prev_val,
+                    'LastDate': last_date.strftime('%Y-%m-%d') if not pd.isnull(last_date) else None,
+                    'LastMarketValue': last_val,
+                    'Diff': diff,
+                    'PctDiff': pct,
+                })
+
+                if prev_val is not None:
+                    total_prev += prev_val
+                if last_val is not None:
+                    total_last += last_val
+
+            # add total row
+            snapshots.append({
+                'Account': 'Total',
+                'PrevMonthEnd': prev_month_end.strftime('%Y-%m-%d'),
+                'PrevDate': None,
+                'PrevMarketValue': total_prev,
+                'LastDate': overall_last.strftime('%Y-%m-%d') if not pd.isnull(overall_last) else None,
+                'LastMarketValue': total_last,
+                'Diff': (total_last - total_prev) if (total_prev is not None) else None,
+                'PctDiff': ((total_last - total_prev) / total_prev * 100) if (total_prev not in (None, 0)) else None,
+            })
+
     # Return both rows and a computed informe-style summary
     # Rows: convert values to serializable
     results = []
@@ -96,4 +160,4 @@ def process_retornos_csv(contents: bytes, account: Optional[str] = None) -> List
             r[col if isinstance(col, str) else str(col)] = v
         results.append(r)
 
-    return {'rows': results, 'count': len(results), 'informe': summaries}
+    return {'rows': results, 'count': len(results), 'informe': summaries, 'snapshots': snapshots}

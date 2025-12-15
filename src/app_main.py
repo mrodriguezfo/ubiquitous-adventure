@@ -44,13 +44,21 @@ async def retornos(file: UploadFile = File(...), account: Optional[str] = Form(N
     try:
         contents = await file.read()
         results = process_retornos_csv(contents, account=account)
-        # processing returns dict with rows/count/informe
+        # processing returns dict with rows/count/informe and snapshots
         images = []
         try:
             images = generate_informe_images(results.get('informe', []))
         except Exception:
             images = []
-        return {**results, 'images': images}
+        # snapshots image
+        snapshot_images = []
+        try:
+            from visuals import generate_snapshots_image
+            snapshot_images = generate_snapshots_image(results.get('snapshots', []))
+        except Exception:
+            snapshot_images = []
+        images.extend(snapshot_images)
+        return {**results, 'images': images, 'snapshot_images': snapshot_images}
     finally:
         await file.close()
 
@@ -76,7 +84,15 @@ async def retornos_local(account: Optional[str] = None):
             images = generate_informe_images(results.get('informe', []))
         except Exception:
             images = []
-        return {**results, 'images': images}
+        # snapshots image
+        snapshot_images = []
+        try:
+            from visuals import generate_snapshots_image
+            snapshot_images = generate_snapshots_image(results.get('snapshots', []))
+        except Exception:
+            snapshot_images = []
+        images.extend(snapshot_images)
+        return {**results, 'images': images, 'snapshot_images': snapshot_images}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
