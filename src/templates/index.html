@@ -76,6 +76,14 @@
         return v;
     }
 
+    function formatMoney(v){
+        if (v === null || v === undefined || v === '') return '';
+        if (typeof v === 'number') return v.toLocaleString(undefined, {style: 'currency', currency: 'USD', maximumFractionDigits:2});
+        const n = Number(v);
+        if (isNaN(n)) return v;
+        return n.toLocaleString(undefined, {style: 'currency', currency: 'USD', maximumFractionDigits:2});
+    }
+
     // Helper to populate date selector from rows
     function populateDateSelect(rows){
         const sel = document.getElementById('dateSelect');
@@ -128,11 +136,11 @@
             html += '<tr>' +
                 `<td>${acct}</td>` +
                 `<td>${prevDate}</td>` +
-                `<td>${formatNumber(prevVal)}</td>` +
+                `<td>${formatMoney(prevVal)}</td>` +
                 `<td>${selectedDate}</td>` +
-                `<td>${formatNumber(selVal)}</td>` +
-                `<td>${formatNumber(diff)}</td>` +
-                `<td>${pct !== '' ? pct.toFixed(2) + '%' : ''}</td>` +
+                `<td>${formatMoney(selVal)}</td>` +
+                `<td class="diff-cell">${formatMoney(diff)}</td>` +
+                `<td class="diff-pct">${pct !== '' ? pct.toFixed(2) + '%' : ''}</td>` +
                 '</tr>';
         }
         html += '</tbody></table>';
