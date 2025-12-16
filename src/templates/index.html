@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Retornos - Panel FLAR</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header class="header">
+        <div class="brand">
+            <div class="logo">FL</div>
+            <div>
+                <h1>FLAR - Retornos</h1>
+                <div class="meta">Reporte diario de retornos y valor de mercado</div>
+            </div>
+        </div>
+        <div class="meta">Usuario: Demo &nbsp; | &nbsp; Fecha: <span id="now">--</span></div>
+    </header>
+
+    <main class="container">
+        <div class="grid">
+            <!-- Tabs: Resumen (principal) y Archivo (upload + contenido) -->
+            <div style="display:flex;gap:8px;margin-bottom:12px">
+                <button id="tabResumen" class="btn">Resumen</button>
+                <button id="tabArchivo" class="btn secondary">Archivo</button>
+            </div>
+            <section>
+                <div id="tab-resumen">
+                    <!-- Result cards will be rendered here -->
+                </div>
+
+                <div id="tab-archivo" style="display:none">
+                    <div class="card">
+                        <h2>Cargar archivo RetornosV21.csv</h2>
+                        <p class="hint">Sube el archivo exportado por el sistema. La transformación reproduce la hoja PowerQuery: salta 5 filas y promueve encabezados.</p>
+                        <form id="uploadForm" class="uploader" enctype="multipart/form-data">
+                            <input type="file" name="file" id="fileInput" accept=".csv,.txt" />
+                            <input type="text" name="account" id="accountInput" placeholder="Filtrar por Account (opcional)" />
+                            <div class="actions">
+                                <button class="btn" type="submit">Procesar</button>
+                                <button type="button" class="btn secondary" id="clearBtn">Limpiar</button>
+                                <button type="button" class="btn" id="downloadImgs">Descargar Imágenes</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="card" style="margin-top:12px">
+                        <div id="file-contents"></div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top:16px">
+                    <div class="informe-title"><h3>Resultados</h3><div id="summary"></div></div>
+                    <div id="snapshots-wrap" style="margin-bottom:12px"></div>
+                    <div id="informe-wrap"></div>
+                    <div id="table-wrap" class="results-table-wrapper"></div>
+                    <div id="images-wrap"></div>
+                </div>
+            </section>
+
+            <aside>
+                <div class="card">
+                    <h3>KPIs</h3>
+                    <div class="summary">
+                        <div class="kpi"><h3>Total Portafolios</h3><p id="kpi-count">-</p></div>
+                        <div class="kpi"><h3>TWRR Avg</h3><p id="kpi-twrr">-</p></div>
+                    </div>
+                    <hr/>
+                    <h4>Instrucciones</h4>
+                    <ol>
+                        <li>Cargar el archivo RetornosV21.csv</li>
+                        <li>Opcional: filtrar por Account</li>
+                        <li>Revisar informe y descargar imágenes</li>
+                    </ol>
+                </div>
+
+                <div class="card" style="margin-top:16px">
+                    <h4>Ayuda rápida</h4>
+                    <p style="font-size:13px;color:#6b7a93">Si el archivo no se procesa, revisa que no tenga protección o que sea CSV plano. Contacta al equipo si necesitas asistencia.</p>
+                </div>
+            </aside>
+        </div>
+    </main>
+
+    <footer class="footer">FLAR - Aplicación interna de reportes. Diseñado para uso corporativo.</footer>
+    <script>
+    document.getElementById('now').innerText = new Date().toLocaleString();
+
+    function formatNumber(v){
+        if (v === null || v === undefined) return '';
+        if (typeof v === 'number') return v.toLocaleString(undefined, {maximumFractionDigits:2});
+        return v;
+    }
+
+    async function loadLocal(account=''){
+        const q = account ? `?account=${encodeURIComponent(account)}` : '';
+        const resp = await fetch('/retornos/local' + q, { method: 'GET' });
+        const text = await resp.text();
+        if (!resp.ok) {
+            try {
+                const j = JSON.parse(text);
+                console.error('Error loading local', j);
+                alert('Error loading local: ' + (j.detail || JSON.stringify(j)));
+            } catch(e) {
+                console.error('Error loading local', text);
+                alert('Error loading local: ' + text);
+            }
+            return;
+        }
+        const data = JSON.parse(text);
+        processResponseData(data);
+    }
+
+    function processResponseData(data){
+        document.getElementById('summary').innerText = `Filas: ${data.count}`;
+        document.getElementById('kpi-count').innerText = data.count;
+
+        const rows = data.rows || [];
+        const informe = data.informe || [];
+        const snapshots = data.snapshots || [];
+
+        // snapshots (HTML)
+        if (snapshots.length > 0) {
+            let snapHtml = '<h3>Valor de Mercado: Mes anterior vs Último disponible</h3><table class="results"><thead><tr><th>Portafolio</th><th>Prev Month End</th><th>Prev Market Value</th><th>Last Date</th><th>Last Market Value</th><th>Diff</th><th>% Dif</th></tr></thead><tbody>';
+            for (const s of snapshots) {
+                snapHtml += `<tr><td>${s.Account}</td><td>${s.PrevMonthEnd ?? ''}</td><td>${formatNumber(s.PrevMarketValue)}</td><td>${s.LastDate ?? ''}</td><td>${formatNumber(s.LastMarketValue)}</td><td>${formatNumber(s.Diff)}</td><td>${s.PctDiff ? s.PctDiff.toFixed(2) + '%' : ''}</td></tr>`;
+            }
+            snapHtml += '</tbody></table>';
+            document.getElementById('snapshots-wrap').innerHTML = snapHtml;
+        } else {
+            document.getElementById('snapshots-wrap').innerHTML = '';
+        }
+
+        // informe
+        if (informe.length > 0) {
+            let infHtml = '<h3>Informe</h3><table class="results"><thead><tr><th>Account</th><th>Date</th><th>Total Market Value</th><th>Total Earnings</th><th>TWRR</th></tr></thead><tbody>';
+            for (const r of informe) {
+                infHtml += `<tr><td>${r.Account}</td><td>${r.Date}</td><td>${formatNumber(r['Total Market Value']) ?? ''}</td><td>${formatNumber(r['Total Earnings']) ?? ''}</td><td>${r.TWRR ?? ''}</td></tr>`;
+            }
+            infHtml += '</tbody></table>';
+            document.getElementById('informe-wrap').innerHTML = infHtml;
+        } else {
+            document.getElementById('informe-wrap').innerHTML = '';
+        }
+
+        // rows table
+        if (rows.length === 0) {
+            document.getElementById('table-wrap').innerHTML = '<p>No hay filas</p>';
+            document.getElementById('kpi-twrr').innerText = '-';
+            return;
+        }
+        const cols = Object.keys(rows[0]);
+        let html = '<table class="results"><thead><tr>' + cols.map(c => `<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+        for (const r of rows) html += '<tr>' + cols.map(c => `<td>${r[c] ?? ''}</td>`).join('') + '</tr>';
+        html += '</tbody></table>';
+        document.getElementById('table-wrap').innerHTML = html;
+
+        // KPI TWRR
+        if (cols.includes('TWRR')) {
+            const twrrVals = rows.map(r => parseFloat(r['TWRR']) ).filter(v => !isNaN(v));
+            if (twrrVals.length > 0) document.getElementById('kpi-twrr').innerText = (twrrVals.reduce((a,b)=>a+b,0)/twrrVals.length).toFixed(6);
+        }
+
+        // images
+        const images = data.images || [];
+        if (images.length > 0) {
+            let imgsHtml = '';
+            for (const p of images) imgsHtml += `<div style="margin-top:12px"><img src="${p}" style="width:100%;height:auto;border-radius:8px;box-shadow:0 6px 18px rgba(11,45,97,0.08)"/></div>`;
+            document.getElementById('images-wrap').innerHTML = imgsHtml;
+        } else document.getElementById('images-wrap').innerHTML = '';
+
+        // file contents preview if present
+        const fileContents = document.getElementById('file-contents');
+        if (fileContents) {
+            let fc = '<h4>Contenido (vista rápida)</h4>';
+            const visibleRows = rows.slice(0,200);
+            if (visibleRows.length === 0) fc += '<p>No hay datos</p>';
+            else {
+                const cols2 = Object.keys(visibleRows[0]);
+                fc += '<div class="results-table-wrapper"><table class="results"><thead><tr>' + cols2.map(c=>`<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+                for (const r of visibleRows) fc += '<tr>' + cols2.map(c=>`<td>${r[c] ?? ''}</td>`).join('') + '</tr>';
+                fc += '</tbody></table></div>';
+            }
+            fileContents.innerHTML = fc;
+        }
+    }
+
+    // Tabs
+    document.getElementById('tabResumen').addEventListener('click', () => {
+        document.getElementById('tab-resumen').style.display = 'block';
+        document.getElementById('tab-archivo').style.display = 'none';
+        document.getElementById('tabResumen').classList.remove('secondary');
+        document.getElementById('tabArchivo').classList.add('secondary');
+    });
+    document.getElementById('tabArchivo').addEventListener('click', () => {
+        document.getElementById('tab-resumen').style.display = 'none';
+        document.getElementById('tab-archivo').style.display = 'block';
+        document.getElementById('tabResumen').classList.add('secondary');
+        document.getElementById('tabArchivo').classList.remove('secondary');
+    });
+
+    // initial load
+    loadLocal();
+
+    // form submit
+    const form = document.getElementById('uploadForm');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fileEl = document.getElementById('fileInput');
+        const file = fileEl && fileEl.files && fileEl.files[0] ? fileEl.files[0] : null;
+        const account = document.getElementById('accountInput').value;
+        if (!file) { await loadLocal(account); document.getElementById('tabResumen').click(); return; }
+        const fd = new FormData(); fd.append('file', file); if (account) fd.append('account', account);
+        const resp = await fetch('/retornos', { method: 'POST', body: fd });
+        const text = await resp.text();
+        if (!resp.ok) {
+            try {
+                const j = JSON.parse(text);
+                console.error('Upload error', j);
+                alert('Error procesando archivo: ' + (j.detail || JSON.stringify(j)));
+            } catch (ee) {
+                console.error('Upload error', text);
+                alert('Error procesando archivo: ' + text);
+            }
+            return;
+        }
+        const data = JSON.parse(text);
+        processResponseData(data); document.getElementById('tabResumen').click();
+    });
+
+    // clear
+    const clearBtn = document.getElementById('clearBtn');
+    clearBtn.addEventListener('click', () => { const fi = document.getElementById('fileInput'); if (fi) fi.value = null; document.getElementById('accountInput').value = ''; document.getElementById('summary').innerText=''; document.getElementById('table-wrap').innerHTML=''; document.getElementById('informe-wrap').innerHTML=''; document.getElementById('images-wrap').innerHTML=''; document.getElementById('snapshots-wrap').innerHTML=''; document.getElementById('kpi-count').innerText='-'; document.getElementById('kpi-twrr').innerText='-'; });
+
+    // download images
+    document.getElementById('downloadImgs').addEventListener('click', () => {
+        const imgs = Array.from(document.querySelectorAll('#images-wrap img')).map(i => i.src);
+        if (imgs.length === 0) return alert('No hay imágenes para descargar');
+        imgs.forEach(src => { const a = document.createElement('a'); a.href = src; a.download = src.split('/').pop(); document.body.appendChild(a); a.click(); a.remove(); });
+    });
+
+    </script>
+
+
+</body>
+</html>
