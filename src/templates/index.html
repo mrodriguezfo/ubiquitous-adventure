@@ -137,7 +137,11 @@
                 '</tr>';
         }
         html += '</tbody></table>';
-        document.getElementById('table-wrap').innerHTML = html;
+        // show snapshots card and render into snapshots-wrap
+        const wrap = document.getElementById('snapshots-wrap');
+        const card = document.getElementById('snapshots-card');
+        if (card) card.style.display = 'block';
+        if (wrap) wrap.innerHTML = html; else document.getElementById('file-contents').innerHTML = html;
     }
 
     function processResponseData(data){
