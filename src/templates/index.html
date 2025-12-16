@@ -153,14 +153,14 @@
         document.getElementById('dateSelect').value = defaultDate;
         buildPortfoliosTable(data, defaultDate);
 
-        // preview first rows
+        // preview first rows (styled)
         const fileContents = document.getElementById('file-contents');
         let fc = '<h4>Contenido (vista rápida)</h4>';
         const visibleRows = rows.slice(0,200);
         const cols2 = Object.keys(visibleRows[0] || {});
         if (visibleRows.length === 0) fc += '<p>No hay datos</p>';
         else {
-            fc += '<div class="results-table-wrapper"><table class="results"><thead><tr>' + cols2.map(c=>`<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+            fc += '<div class="results-table-wrapper"><table class="results styled"><thead><tr>' + cols2.map(c=>`<th>${c}</th>`).join('') + '</tr></thead><tbody>';
             for (const r of visibleRows) fc += '<tr>' + cols2.map(c=>`<td>${r[c] ?? ''}</td>`).join('') + '</tr>';
             fc += '</tbody></table></div>';
         }
