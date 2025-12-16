@@ -30,11 +30,18 @@
     </header>
 
     <main class="container">
-        <div class="card">
-            <h2 style="margin-top:0">Cargar archivo y ver portafolios</h2>
-            <p class="hint">Sube el archivo exportado por el sistema (RetornosV21.csv). La app mostrará los portafolios con el valor al cierre del mes anterior y al día seleccionado.</p>
+        <div class="card" style="max-width:900px;margin:20px auto;padding:24px;text-align:left">
+            <div style="display:flex;align-items:center;gap:12px">
+                <div class="logo" style="width:56px;height:56px;font-size:18px">FL</div>
+                <div>
+                    <h1 style="margin:0">FLAR - Moodboard</h1>
+                    <div class="meta">Visual integrity & portfolio snapshots</div>
+                </div>
+            </div>
 
-            <form id="uploadForm" class="uploader" enctype="multipart/form-data">
+            <p class="hint" style="margin-top:12px">Sube el archivo RetornosV21.csv y selecciona la fecha que deseas comparar con el último cierre de mes.</p>
+
+            <form id="uploadForm" class="uploader" enctype="multipart/form-data" style="margin-top:12px">
                 <div class="top-controls">
                     <input type="file" name="file" id="fileInput" accept=".csv,.txt" />
                     <div class="date-select">
@@ -51,12 +58,12 @@
             <div id="summary" style="margin-top:8px;font-size:14px;color:#556"></div>
         </div>
 
-        <div class="card table-card">
-            <h3 style="margin-top:0">Portafolios</h3>
-            <div id="table-wrap" class="results-table-wrapper"></div>
+        <div id="snapshots-card" class="card table-card" style="max-width:1100px;margin:18px auto;display:none">
+            <h3 style="margin-top:0">Valor de Mercado - Mes anterior vs Fecha seleccionada</h3>
+            <div id="snapshots-wrap" class="results-table-wrapper"></div>
         </div>
 
-        <div id="file-contents" style="margin-top:12px"></div>
+        <div id="file-contents" style="margin-top:12px;max-width:1100px;margin-left:auto;margin-right:auto"></div>
     </main>
 
     <footer class="footer">FLAR - Aplicación interna de reportes. Diseñado para uso corporativo.</footer>
