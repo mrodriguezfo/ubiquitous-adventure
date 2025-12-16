@@ -131,16 +131,18 @@
             const key = acct + '|' + selectedDate;
             const row = rowMap[key];
             const selVal = row ? row['Total Market Value'] : '';
-            const diff = (typeof selVal === 'number' && typeof prevVal === 'number') ? selVal - prevVal : '';
+            const diff = (typeof selVal === 'number' && typeof prevVal === 'number') ? selVal - prevVal : 0;
             const pct = (typeof diff === 'number' && typeof prevVal === 'number' && prevVal !== 0) ? (diff / prevVal * 100) : '';
+            const diffClass = (typeof diff === 'number') ? (diff > 0 ? 'positive' : (diff < 0 ? 'negative' : '')) : '';
+            const pctClass = (typeof pct === 'number') ? (pct > 0 ? 'positive' : (pct < 0 ? 'negative' : '')) : '';
             html += '<tr>' +
                 `<td>${acct}</td>` +
                 `<td>${prevDate}</td>` +
                 `<td>${formatMoney(prevVal)}</td>` +
                 `<td>${selectedDate}</td>` +
                 `<td>${formatMoney(selVal)}</td>` +
-                `<td class="diff-cell">${formatMoney(diff)}</td>` +
-                `<td class="diff-pct">${pct !== '' ? pct.toFixed(2) + '%' : ''}</td>` +
+                `<td class="diff-cell ${diffClass}">${formatMoney(diff)}</td>` +
+                `<td class="diff-pct ${pctClass}">${pct !== '' ? pct.toFixed(2) + '%' : ''}</td>` +
                 '</tr>';
         }
         html += '</tbody></table>';
