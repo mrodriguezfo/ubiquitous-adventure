@@ -64,7 +64,7 @@
             <div id="snapshots-wrap" class="results-table-wrapper"></div>
         </div>
 
-        <div id="file-contents" style="margin-top:12px;max-width:1100px;margin-left:auto;margin-right:auto"></div>
+        
     </main>
 
     <footer class="footer">FLAR - Aplicación interna de reportes. Diseñado para uso corporativo.</footer>
@@ -165,19 +165,6 @@
         document.getElementById('dateSelect').value = defaultDate;
         buildPortfoliosTable(data, defaultDate);
 
-        // preview first rows (styled)
-        const fileContents = document.getElementById('file-contents');
-        let fc = '<h4>Contenido (vista rápida)</h4>';
-        const visibleRows = rows.slice(0,200);
-        const cols2 = Object.keys(visibleRows[0] || {});
-        if (visibleRows.length === 0) fc += '<p>No hay datos</p>';
-        else {
-            fc += '<div class="results-table-wrapper"><table class="results styled"><thead><tr>' + cols2.map(c=>`<th>${c}</th>`).join('') + '</tr></thead><tbody>';
-            for (const r of visibleRows) fc += '<tr>' + cols2.map(c=>`<td>${r[c] ?? ''}</td>`).join('') + '</tr>';
-            fc += '</tbody></table></div>';
-        }
-        fileContents.innerHTML = fc;
-
         // when changing date selection, rebuild table
         document.getElementById('dateSelect').onchange = (e) => buildPortfoliosTable(data, e.target.value);
 
@@ -188,16 +175,13 @@
         if (emailBtn) { emailBtn.style.display = 'inline-block'; emailBtn.onclick = () => showEmailModal(data); }
     }
 
-    // initial load (local fallback)
-    loadLocal().then(d => { if (d) processResponseData(d); });
-
     // form submit
     const form = document.getElementById('uploadForm');
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const fileEl = document.getElementById('fileInput');
         const file = fileEl && fileEl.files && fileEl.files[0] ? fileEl.files[0] : null;
-        if (!file) { const d = await loadLocal(); if (d) processResponseData(d); return; }
+        if (!file) { alert('Por favor seleccione un archivo CSV antes de procesar.'); return; }
         const fd = new FormData(); fd.append('file', file);
         const resp = await fetch('/retornos', { method: 'POST', body: fd });
         const text = await resp.text();
