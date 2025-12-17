@@ -50,6 +50,7 @@
                     <div style="margin-left:auto;display:flex;gap:8px">
                         <button class="btn" type="submit">Procesar</button>
                         <button class="btn" id="pdfBtn" type="button" style="display:none">Generar PDF</button>
+                        <button class="btn" id="emailBtn" type="button" style="display:none">Enviar por correo</button>
                         <button type="button" class="btn secondary" id="clearBtn">Limpiar</button>
                     </div>
                 </div>
@@ -180,9 +181,11 @@
         // when changing date selection, rebuild table
         document.getElementById('dateSelect').onchange = (e) => buildPortfoliosTable(data, e.target.value);
 
-        // show pdf button when data is present
+        // show pdf and email buttons when data is present
         const pdfBtn = document.getElementById('pdfBtn');
+        const emailBtn = document.getElementById('emailBtn');
         if (pdfBtn) { pdfBtn.style.display = 'inline-block'; pdfBtn.onclick = () => generatePDF(data); }
+        if (emailBtn) { emailBtn.style.display = 'inline-block'; emailBtn.onclick = () => showEmailModal(data); }
     }
 
     // initial load (local fallback)
@@ -220,6 +223,57 @@
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a'); a.href = url; a.download = `Informe_${selected_date}.pdf`; document.body.appendChild(a); a.click(); a.remove();
         }catch(e){ alert('Error: ' + e); }
+    }
+
+    // simple modal to collect SMTP creds and send email
+    function showEmailModal(data){
+        // create modal markup
+        const modal = document.createElement('div');
+        modal.style.position = 'fixed'; modal.style.left = 0; modal.style.top = 0; modal.style.right = 0; modal.style.bottom = 0; modal.style.background = 'rgba(0,0,0,0.4)'; modal.style.display = 'flex'; modal.style.alignItems = 'center'; modal.style.justifyContent = 'center';
+        const box = document.createElement('div'); box.style.background = '#fff'; box.style.padding = '18px'; box.style.borderRadius = '8px'; box.style.width = '520px'; box.style.maxWidth='95%';
+        box.innerHTML = `
+            <h3>Enviar informe por correo</h3>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+                <label>SMTP Server: <input id="smtp_server" value="smtp.office365.com"/></label>
+                <label>SMTP Port: <input id="smtp_port" value="587"/></label>
+                <label>Usuario (correo): <input id="smtp_user" value=""/></label>
+                <label>Contraseña: <input id="smtp_pass" type="password" value=""/></label>
+                <label>Para: <input id="to_email" value="arodriguez@flar.net"/></label>
+                <label>Asunto: <input id="email_subject" value="Informe de retornos"/></label>
+                <label>Mensaje: <textarea id="email_body" rows="4">Adjunto el informe solicitado.</textarea></label>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+                    <button id="send_mail_btn" class="btn">Enviar</button>
+                    <button id="cancel_mail_btn" class="btn secondary">Cancelar</button>
+                </div>
+            </div>
+        `;
+        modal.appendChild(box);
+        document.body.appendChild(modal);
+        document.getElementById('cancel_mail_btn').onclick = () => modal.remove();
+        document.getElementById('send_mail_btn').onclick = async () => {
+            const selected_date = document.getElementById('dateSelect').value;
+            const smtp_server = document.getElementById('smtp_server').value;
+            const smtp_port = document.getElementById('smtp_port').value;
+            const smtp_user = document.getElementById('smtp_user').value;
+            const smtp_pass = document.getElementById('smtp_pass').value;
+            const to_email = document.getElementById('to_email').value;
+            const subject = document.getElementById('email_subject').value;
+            const body = document.getElementById('email_body').value;
+            const fd = new FormData();
+            fd.append('selected_date', selected_date);
+            fd.append('smtp_server', smtp_server);
+            fd.append('smtp_port', smtp_port);
+            fd.append('smtp_user', smtp_user);
+            fd.append('smtp_pass', smtp_pass);
+            fd.append('to_email', to_email);
+            fd.append('subject', subject);
+            fd.append('body', body);
+            try{
+                const resp = await fetch('/retornos/email', { method: 'POST', body: fd });
+                const j = await resp.json();
+                if (!resp.ok) { alert('Error: ' + (j.detail || JSON.stringify(j))); } else { alert('Correo enviado'); modal.remove(); }
+            }catch(e){ alert('Error: ' + e); }
+        }
     }
 
     // clear

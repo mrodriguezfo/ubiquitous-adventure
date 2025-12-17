@@ -93,6 +93,63 @@ async def retornos_pdf(selected_date: str = Form(...), file: UploadFile = File(N
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
 
+@app.post('/retornos/email')
+async def retornos_email(
+    selected_date: str = Form(...),
+    smtp_server: str = Form('smtp.office365.com'),
+    smtp_port: int = Form(587),
+    smtp_user: str = Form(...),
+    smtp_pass: str = Form(...),
+    to_email: str = Form(...),
+    subject: Optional[str] = Form(None),
+    body: Optional[str] = Form(None),
+    file: UploadFile = File(None),
+):
+    """Genera el PDF y envía por SMTP usando credenciales proporcionadas en tiempo de ejecución.
+
+    Nota: las credenciales NO se guardan en servidor.
+    """
+    import smtplib
+    from email.message import EmailMessage
+
+    try:
+        # obtain results from uploaded file or local
+        if file and file.filename:
+            contents = await file.read()
+            results = process_retornos_csv(contents)
+            await file.close()
+        else:
+            local_csv = BASE_DIR.parent / 'RetornosV21_test.csv'
+            if not local_csv.exists():
+                local_csv = BASE_DIR.parent / 'RetornosV21.csv'
+            if not local_csv.exists():
+                return JSONResponse(status_code=404, content={"detail": "Archivo local no encontrado para generar PDF"})
+            contents = local_csv.read_bytes()
+            results = process_retornos_csv(contents)
+
+        pdf_bytes = generate_pdf(results, selected_date)
+
+        # compose email
+        msg = EmailMessage()
+        msg['Subject'] = subject or f'Informe Retornos {selected_date}'
+        msg['From'] = smtp_user
+        msg['To'] = to_email
+        msg.set_content(body or 'Adjunto se encuentra el informe de retornos.')
+
+        msg.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename=f'Informe_{selected_date}.pdf')
+
+        # connect to SMTP and send
+        server = smtplib.SMTP(smtp_server, int(smtp_port), timeout=20)
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+        server.quit()
+
+        return JSONResponse(status_code=200, content={"detail": "Correo enviado"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
 @app.get('/retornos/local')
 async def retornos_local(account: Optional[str] = None):
     """Procesa el archivo RetornosV21_test.csv que está en el repositorio sin que el usuario lo suba.
