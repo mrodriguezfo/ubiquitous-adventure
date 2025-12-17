@@ -1,9 +1,11 @@
 from reportlab.lib.pagesizes import letter, landscape
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from io import BytesIO
+from pathlib import Path
+from datetime import datetime
 
 
 def _fmt_money(v):
@@ -16,11 +18,51 @@ def _fmt_money(v):
         return str(v or '')
 
 
+def _header_footer(canvas, doc, title_text, logo_path=None):
+    # Header: logo on left (image if available, otherwise draw a simple emblem), title centered/right
+    width, height = doc.pagesize
+    canvas.saveState()
+    y = height - 18
+    logo_drawn = False
+    if logo_path and Path(logo_path).exists():
+        try:
+            logo_w = 48
+            logo_h = 48
+            canvas.drawImage(str(logo_path), doc.leftMargin, y - logo_h, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
+            logo_drawn = True
+        except Exception:
+            logo_drawn = False
+
+    if not logo_drawn:
+        # draw a compact modern emblem: dark-blue circle with white initials
+        cx = doc.leftMargin + 24
+        cy = y - 24
+        r = 22
+        canvas.setFillColor(colors.HexColor('#1f3b82'))
+        canvas.circle(cx, cy, r, stroke=0, fill=1)
+        # inner star-like shape (simple) - draw a small white 'FL' text to represent brand
+        canvas.setFont('Helvetica-Bold', 12)
+        canvas.setFillColor(colors.white)
+        canvas.drawCentredString(cx, cy - 4, 'FL')
+
+    # Title (right aligned)
+    canvas.setFont('Helvetica-Bold', 14)
+    canvas.setFillColor(colors.HexColor('#1f3b82'))
+    canvas.drawRightString(width - doc.rightMargin, y - 6, title_text)
+
+    # Footer: generation date and page number
+    canvas.setFont('Helvetica', 8)
+    canvas.setFillColor(colors.HexColor('#666666'))
+    gen_text = f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    canvas.drawString(doc.leftMargin, 12, gen_text)
+    canvas.drawRightString(width - doc.rightMargin, 12, f"Página {doc.page}")
+    canvas.restoreState()
+
+
 def generate_pdf(results: dict, selected_date: str) -> bytes:
     """Generate a PDF report with a clean, tabular format suitable for printing.
 
-    The layout matches the requested style: title line, header row with light background,
-    right-aligned numeric columns, and consistent column widths.
+    The layout includes a logo (if available), a header with title and a footer with page info.
     """
     rows = results.get('rows', [])
     snapshots = results.get('snapshots', [])
@@ -36,17 +78,17 @@ def generate_pdf(results: dict, selected_date: str) -> bytes:
 
     buffer = BytesIO()
     page_size = landscape(letter)
-    doc = SimpleDocTemplate(buffer, pagesize=page_size, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+    doc = SimpleDocTemplate(buffer, pagesize=page_size, rightMargin=20, leftMargin=20, topMargin=40, bottomMargin=40)
     elements = []
     styles = getSampleStyleSheet()
 
     title_style = ParagraphStyle('title', parent=styles['Heading2'], alignment=1, spaceAfter=6)
     subtitle_style = ParagraphStyle('subtitle', parent=styles['Normal'], alignment=1, textColor=colors.HexColor('#666'), spaceAfter=12)
 
-    title = Paragraph(f"Valor de Mercado - {selected_date}", title_style)
-    subtitle = Paragraph('', subtitle_style)
+    title_text = f"Valor de Mercado - {selected_date}"
+    title = Paragraph(title_text, title_style)
     elements.append(title)
-    elements.append(subtitle)
+    elements.append(Spacer(1, 6))
 
     # Table header
     header = ["Portafolio", "Prev Month End", "Valor PrevMonthEnd", f"{selected_date}", "Valor", "Diff", "% Dif"]
@@ -113,8 +155,12 @@ def generate_pdf(results: dict, selected_date: str) -> bytes:
     table.setStyle(tbl_style)
     elements.append(table)
 
-    # Build document
-    doc.build(elements)
+    # Header/footer callback with optional logo
+    logo_path = Path(__file__).resolve().parent / 'static' / 'flar_logo.png'
+    def _hf(c, d):
+        _header_footer(c, d, title_text, logo_path if logo_path.exists() else None)
+
+    doc.build(elements, onFirstPage=_hf, onLaterPages=_hf)
     pdf = buffer.getvalue()
     buffer.close()
     return pdf
