@@ -114,6 +114,7 @@
     function buildPortfoliosTable(data, selectedDate){
         const rows = data.rows || [];
         const snapshots = data.snapshots || [];
+        const benchmarks = data.benchmarks || [];
         // map snapshots by account to get PrevMonthEnd / PrevMarketValue
         const snapMap = {};
         for (const s of snapshots) snapMap[s.Account] = s;
@@ -125,28 +126,51 @@
             rowMap[key] = r;
         }
 
+        // helper to find benchmark for a portfolio
+        function findBenchmarkForRow(row){
+            if (!row) return null;
+            const perf = (row['Perf. Class'] || '').toString().toLowerCase();
+            // try to find benchmark that contains perf class
+            for (const b of benchmarks){
+                if ((b.Account||'').toString().toLowerCase().includes(perf) && b.TWRR != null) return b;
+            }
+            // try TOTAL BMK
+            for (const b of benchmarks){ if ((b.Account||'').toString().toLowerCase().includes('total') && (b.Account||'').toString().toLowerCase().includes('bmk')) return b; }
+            // fallback first benchmark with value
+            for (const b of benchmarks){ if (b.TWRR != null) return b; }
+            return null;
+        }
+
         // determine unique accounts (order by Account)
         const accounts = Array.from(new Set(rows.map(r=>r.Account))).sort();
-        let html = '<table class="results"><thead><tr><th>Portafolio</th><th>Prev Month End</th><th>Valor PrevMonthEnd</th><th>' + selectedDate + '</th><th>Valor</th><th>Diff</th><th>% Dif</th></tr></thead><tbody>';
+        // header: include selected date in header label (date removed from row columns)
+        let html = '<table class="results"><thead><tr><th>Portafolio</th><th>Valor PrevMonthEnd</th><th>' + selectedDate + ' - Valor</th><th>Diff</th><th>% Dif</th><th>Retorno</th><th>Benchmark</th></tr></thead><tbody>';
         for (const acct of accounts){
             const snap = snapMap[acct] || {};
-            const prevDate = snap.PrevMonthEnd || '';
             const prevVal = snap.PrevMarketValue != null ? snap.PrevMarketValue : '';
             const key = acct + '|' + selectedDate;
-            const row = rowMap[key];
+            const row = rowMap[key] || {};
             const selVal = row ? row['Total Market Value'] : '';
-            const diff = (typeof selVal === 'number' && typeof prevVal === 'number') ? selVal - prevVal : 0;
-            const pct = (typeof diff === 'number' && typeof prevVal === 'number' && prevVal !== 0) ? (diff / prevVal * 100) : '';
+            const diff = (typeof selVal === 'number' && typeof prevVal === 'number') ? selVal - prevVal : ((Number(selVal)||0) - (Number(prevVal)||0));
+            const pct = (prevVal && prevVal !== 0) ? (diff / prevVal * 100) : '';
             const diffClass = (typeof diff === 'number') ? (diff > 0 ? 'positive' : (diff < 0 ? 'negative' : '')) : '';
             const pctClass = (typeof pct === 'number') ? (pct > 0 ? 'positive' : (pct < 0 ? 'negative' : '')) : '';
+
+            // retorno (TWRR) for the selected date
+            const retorno = (row && row['TWRR'] != null) ? (Number(row['TWRR']) * 100) : null;
+            // benchmark
+            const b = findBenchmarkForRow(row);
+            const bmk_ret = b && b.TWRR != null ? (Number(b.TWRR) * 100) : null;
+            const bmk_name = b ? b.Account : '';
+
             html += '<tr>' +
                 `<td>${acct}</td>` +
-                `<td>${prevDate}</td>` +
                 `<td>${formatMoney(prevVal)}</td>` +
-                `<td>${selectedDate}</td>` +
                 `<td>${formatMoney(selVal)}</td>` +
                 `<td class="diff-cell ${diffClass}">${formatMoney(diff)}</td>` +
                 `<td class="diff-pct ${pctClass}">${pct !== '' ? pct.toFixed(2) + '%' : ''}</td>` +
+                `<td style="text-align:right">${retorno != null ? retorno.toFixed(2) + '%' : ''}</td>` +
+                `<td style="text-align:left">${bmk_name} ${bmk_ret != null ? (' - ' + bmk_ret.toFixed(2) + '%') : ''}</td>` +
                 '</tr>';
         }
         html += '</tbody></table>';
@@ -286,8 +310,13 @@
         for (const r of rows){ const key = (r.Account||'') + '|' + (r['End Date']||r['Date']||r['LastDate']||''); rowMap[key]=r; }
         const accounts = Array.from(new Set(rows.map(r=>r.Account))).sort();
         let html = '<table class="report-table" style="width:100%;border-collapse:collapse">';
-        html += '<thead><tr style="background:#f0f4f8;color:#333"><th style="text-align:left;padding:8px">Portafolio</th><th style="padding:8px">Prev Month End</th><th style="padding:8px;text-align:right">Valor PrevMonthEnd</th><th style="padding:8px">Fecha</th><th style="padding:8px;text-align:right">Valor</th><th style="padding:8px;text-align:right">Diff</th><th style="padding:8px;text-align:right">% Dif</th></tr></thead><tbody>';
-        for (const acct of accounts){ const snap = snapMap[acct]||{}; const prevDate=snap.PrevMonthEnd||''; const prevVal = snap.PrevMarketValue!=null?snap.PrevMarketValue:''; const key = acct+'|'+selectedDate; const row = rowMap[key]; const selVal = row?row['Total Market Value']:''; const diff = (typeof selVal==='number'&&typeof prevVal==='number')?selVal-prevVal: (Number(selVal)||0) - (Number(prevVal)||0); const pct = (prevVal && prevVal!=0)?(diff/prevVal*100):''; html += `<tr><td style="padding:8px">${acct}</td><td style="padding:8px">${prevDate}</td><td style="padding:8px;text-align:right">${(prevVal||'')}</td><td style="padding:8px">${selectedDate}</td><td style="padding:8px;text-align:right">${(selVal||'')}</td><td style="padding:8px;text-align:right">${diff?diff.toLocaleString(undefined,{style:'currency',currency:'USD'}):''}</td><td style="padding:8px;text-align:right">${pct?pct.toFixed(2)+'%':''}</td></tr>` }
+        html += '<thead><tr style="background:#f0f4f8;color:#333"><th style="text-align:left;padding:8px">Portafolio</th><th style="padding:8px;text-align:right">Valor PrevMonthEnd</th><th style="padding:8px;text-align:right">' + selectedDate + ' - Valor</th><th style="padding:8px;text-align:right">Diff</th><th style="padding:8px;text-align:right">% Dif</th><th style="padding:8px;text-align:right">Retorno</th><th style="padding:8px;text-align:left">Benchmark</th></tr></thead><tbody>';
+        for (const acct of accounts){ const snap = snapMap[acct]||{}; const prevVal = snap.PrevMarketValue!=null?snap.PrevMarketValue:''; const key = acct+'|'+selectedDate; const row = rowMap[key]; const selVal = row?row['Total Market Value']:''; const diff = (typeof selVal==='number'&&typeof prevVal==='number')?selVal-prevVal: (Number(selVal)||0) - (Number(prevVal)||0); const pct = (prevVal && prevVal!=0)?(diff/prevVal*100):''; const retorno = (row && row['TWRR'] != null) ? (Number(row['TWRR'])*100) : null; // benchmark
+            let bmk = '';
+            for (const b of (data.benchmarks||[])){ if ((b.Account||'').toString().toLowerCase().includes((row && row['Perf. Class']||'').toString().toLowerCase())){ bmk = b.Account + (b.TWRR!=null ? (' - ' + (Number(b.TWRR)*100).toFixed(2)+'%') : ''); break; } }
+            if(!bmk){ for (const b of (data.benchmarks||[])){ if ((b.Account||'').toString().toLowerCase().includes('total') && (b.Account||'').toString().toLowerCase().includes('bmk')){ bmk = b.Account + (b.TWRR!=null?(' - '+(Number(b.TWRR)*100).toFixed(2)+'%'):''); break; } }
+            if(!bmk){ for(const b of (data.benchmarks||[])){ if(b.TWRR!=null){ bmk = b.Account + (' - ' + (Number(b.TWRR)*100).toFixed(2)+'%'); break; } } }
+            html += `<tr><td style="padding:8px">${acct}</td><td style="padding:8px;text-align:right">${prevVal?prevVal.toLocaleString(undefined,{style:'currency',currency:'USD'}):''}</td><td style="padding:8px;text-align:right">${selVal?selVal.toLocaleString(undefined,{style:'currency',currency:'USD'}):''}</td><td style="padding:8px;text-align:right">${diff?diff.toLocaleString(undefined,{style:'currency',currency:'USD'}):''}</td><td style="padding:8px;text-align:right">${pct?pct.toFixed(2)+'%':''}</td><td style="padding:8px;text-align:right">${retorno!=null?retorno.toFixed(2)+'%':''}</td><td style="padding:8px;text-align:left">${bmk}</td></tr>` }
         html += '</tbody></table>';
         return html;
     }
