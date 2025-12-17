@@ -49,6 +49,7 @@
                     </div>
                     <div style="margin-left:auto;display:flex;gap:8px">
                         <button class="btn" type="submit">Procesar</button>
+                        <button class="btn" id="pdfBtn" type="button" style="display:none">Generar PDF</button>
                         <button type="button" class="btn secondary" id="clearBtn">Limpiar</button>
                     </div>
                 </div>
@@ -178,6 +179,10 @@
 
         // when changing date selection, rebuild table
         document.getElementById('dateSelect').onchange = (e) => buildPortfoliosTable(data, e.target.value);
+
+        // show pdf button when data is present
+        const pdfBtn = document.getElementById('pdfBtn');
+        if (pdfBtn) { pdfBtn.style.display = 'inline-block'; pdfBtn.onclick = () => generatePDF(data); }
     }
 
     // initial load (local fallback)
@@ -200,6 +205,22 @@
         const data = JSON.parse(text);
         processResponseData(data);
     });
+
+    // function to call PDF endpoint and download
+    async function generatePDF(data){
+        try{
+            const sel = document.getElementById('dateSelect');
+            const selected_date = sel ? sel.value : '';
+            const fd = new FormData();
+            fd.append('selected_date', selected_date);
+            // no file attached: server will use local
+            const resp = await fetch('/retornos/pdf', { method: 'POST', body: fd });
+            if (!resp.ok) { const txt = await resp.text(); alert('Error generando PDF: ' + txt); return; }
+            const blob = await resp.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `Informe_${selected_date}.pdf`; document.body.appendChild(a); a.click(); a.remove();
+        }catch(e){ alert('Error: ' + e); }
+    }
 
     // clear
     document.getElementById('clearBtn').addEventListener('click', () => { const fi = document.getElementById('fileInput'); if (fi) fi.value = null; document.getElementById('dateSelect').innerHTML = ''; document.getElementById('table-wrap').innerHTML = ''; document.getElementById('file-contents').innerHTML = ''; document.getElementById('summary').innerText = ''; });
