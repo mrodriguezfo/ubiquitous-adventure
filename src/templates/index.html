@@ -227,6 +227,72 @@
         }catch(e){ alert('Error: ' + e); }
     }
 
+    // show HTML preview of the report
+    function showHtmlPreview(data){
+        const sel = document.getElementById('dateSelect');
+        const selected_date = sel ? sel.value : '';
+        // build a styled HTML report modal
+        const modal = document.createElement('div');
+        modal.style.position = 'fixed'; modal.style.left = 0; modal.style.top = 0; modal.style.right = 0; modal.style.bottom = 0; modal.style.background = 'rgba(0,0,0,0.6)'; modal.style.display = 'flex'; modal.style.alignItems = 'center'; modal.style.justifyContent = 'center';
+        const box = document.createElement('div'); box.style.background = '#fff'; box.style.padding = '18px'; box.style.borderRadius = '8px'; box.style.width = '90%'; box.style.maxWidth='1100px'; box.style.maxHeight='90%'; box.style.overflow='auto';
+        // build header with logo and title
+        const header = document.createElement('div'); header.style.display='flex'; header.style.alignItems='center'; header.style.justifyContent='space-between'; header.style.marginBottom='12px';
+        const left = document.createElement('div'); left.style.display='flex'; left.style.alignItems='center';
+        const logo = document.createElement('div'); logo.style.width='64px'; logo.style.height='64px'; logo.style.background='#1f3b82'; logo.style.borderRadius='8px'; logo.style.display='flex'; logo.style.alignItems='center'; logo.style.justifyContent='center'; logo.style.color='#fff'; logo.style.fontWeight='700'; logo.style.fontSize='20px'; logo.innerText='FL';
+        left.appendChild(logo);
+        const titleWrap = document.createElement('div'); titleWrap.style.marginLeft='12px'; const t1 = document.createElement('div'); t1.style.fontSize='18px'; t1.style.fontWeight='700'; t1.innerText='Valor de Mercado'; const t2 = document.createElement('div'); t2.style.color='#666'; t2.innerText=`Fecha: ${selected_date}`; titleWrap.appendChild(t1); titleWrap.appendChild(t2);
+        left.appendChild(titleWrap);
+        header.appendChild(left);
+        const right = document.createElement('div'); right.style.textAlign='right'; right.innerHTML=`<div style="font-weight:700;color:#1f3b82">FLAR</div><div style="color:#666;font-size:12px">Reporte</div>`;
+        header.appendChild(right);
+        box.appendChild(header);
+
+        // summary KPIs
+        const kpiRow = document.createElement('div'); kpiRow.style.display='flex'; kpiRow.style.gap='12px'; kpiRow.style.marginBottom='12px';
+        const totalPort = (data.rows||[]).length;
+        const totalVal = (data.rows||[]).reduce((s,r)=>s + (Number(r['Total Market Value'])||0),0);
+        const k1 = document.createElement('div'); k1.style.padding='10px'; k1.style.flex='1'; k1.style.background='#f7f9fc'; k1.style.borderRadius='6px'; k1.innerHTML=`<div style="font-size:12px;color:#666">Portafolios</div><div style="font-weight:700;font-size:18px">${totalPort}</div>`;
+        const k2 = document.createElement('div'); k2.style.padding='10px'; k2.style.flex='2'; k2.style.background='#f7f9fc'; k2.style.borderRadius='6px'; k2.innerHTML=`<div style="font-size:12px;color:#666">Valor Total</div><div style="font-weight:700;font-size:18px">${(totalVal).toLocaleString(undefined,{style:'currency',currency:'USD'})}</div>`;
+        kpiRow.appendChild(k1); kpiRow.appendChild(k2); box.appendChild(kpiRow);
+
+        // table
+        const tableWrap = document.createElement('div');
+        tableWrap.innerHTML = buildReportHtmlTable(data, selected_date);
+        box.appendChild(tableWrap);
+
+        // actions
+        const actions = document.createElement('div'); actions.style.marginTop='12px'; actions.style.display='flex'; actions.style.justifyContent='flex-end'; actions.style.gap='8px';
+        const exportBtn = document.createElement('button'); exportBtn.className='btn'; exportBtn.innerText='Exportar a PDF (imprimir)'; exportBtn.onclick = ()=>{
+            // open new window with printable content
+            const w = window.open('','_blank');
+            const docHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Informe ${selected_date}</title><link rel="stylesheet" href="/static/style.css"></head><body>${box.innerHTML}</body></html>`;
+            w.document.open(); w.document.write(docHtml); w.document.close();
+            w.focus();
+            // trigger print after small delay
+            setTimeout(()=>{ w.print(); },400);
+        };
+        const closeBtn = document.createElement('button'); closeBtn.className='btn secondary'; closeBtn.innerText='Cerrar'; closeBtn.onclick = ()=> modal.remove();
+        actions.appendChild(exportBtn); actions.appendChild(closeBtn); box.appendChild(actions);
+
+        modal.appendChild(box); document.body.appendChild(modal);
+    }
+
+    function buildReportHtmlTable(data, selectedDate){
+        const rows = data.rows || [];
+        const snapshots = data.snapshots || [];
+        const snapMap = {};
+        for (const s of snapshots) snapMap[s.Account]=s;
+        const rowMap = {};
+        for (const r of rows){ const key = (r.Account||'') + '|' + (r['End Date']||r['Date']||r['LastDate']||''); rowMap[key]=r; }
+        const accounts = Array.from(new Set(rows.map(r=>r.Account))).sort();
+        let html = '<table class="report-table" style="width:100%;border-collapse:collapse">';
+        html += '<thead><tr style="background:#f0f4f8;color:#333"><th style="text-align:left;padding:8px">Portafolio</th><th style="padding:8px">Prev Month End</th><th style="padding:8px;text-align:right">Valor PrevMonthEnd</th><th style="padding:8px">Fecha</th><th style="padding:8px;text-align:right">Valor</th><th style="padding:8px;text-align:right">Diff</th><th style="padding:8px;text-align:right">% Dif</th></tr></thead><tbody>';
+        for (const acct of accounts){ const snap = snapMap[acct]||{}; const prevDate=snap.PrevMonthEnd||''; const prevVal = snap.PrevMarketValue!=null?snap.PrevMarketValue:''; const key = acct+'|'+selectedDate; const row = rowMap[key]; const selVal = row?row['Total Market Value']:''; const diff = (typeof selVal==='number'&&typeof prevVal==='number')?selVal-prevVal: (Number(selVal)||0) - (Number(prevVal)||0); const pct = (prevVal && prevVal!=0)?(diff/prevVal*100):''; html += `<tr><td style="padding:8px">${acct}</td><td style="padding:8px">${prevDate}</td><td style="padding:8px;text-align:right">${(prevVal||'')}</td><td style="padding:8px">${selectedDate}</td><td style="padding:8px;text-align:right">${(selVal||'')}</td><td style="padding:8px;text-align:right">${diff?diff.toLocaleString(undefined,{style:'currency',currency:'USD'}):''}</td><td style="padding:8px;text-align:right">${pct?pct.toFixed(2)+'%':''}</td></tr>` }
+        html += '</tbody></table>';
+        return html;
+    }
+
+
     // simple modal to collect SMTP creds and send email
     function showEmailModal(data){
         // create modal markup
