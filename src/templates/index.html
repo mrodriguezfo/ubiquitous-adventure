@@ -51,6 +51,7 @@
                         <button class="btn" type="submit">Procesar</button>
                         <button class="btn" id="pdfBtn" type="button" style="display:none">Descargar PDF</button>
                         <button class="btn" id="previewPdfBtn" type="button" style="display:none">Vista previa PDF</button>
+                        <button class="btn" id="previewHtmlBtn" type="button" style="display:none">Vista previa (HTML)</button>
                         <button class="btn" id="emailBtn" type="button" style="display:none">Enviar por correo</button>
                         <button type="button" class="btn secondary" id="clearBtn">Limpiar</button>
                     </div>
@@ -175,6 +176,8 @@
         const emailBtn = document.getElementById('emailBtn');
         if (pdfBtn) { pdfBtn.style.display = 'inline-block'; pdfBtn.onclick = () => generatePDF(data, false); }
         if (previewBtn) { previewBtn.style.display = 'inline-block'; previewBtn.onclick = () => generatePDF(data, true); }
+        const previewHtmlBtn = document.getElementById('previewHtmlBtn');
+        if (previewHtmlBtn) { previewHtmlBtn.style.display = 'inline-block'; previewHtmlBtn.onclick = () => showHtmlPreview(data); }
         if (emailBtn) { emailBtn.style.display = 'inline-block'; emailBtn.onclick = () => showEmailModal(data); }
     }
 
@@ -207,7 +210,7 @@
             const resp = await fetch('/retornos/pdf', { method: 'POST', body: fd });
             if (!resp.ok) { const txt = await resp.text(); alert('Error generando PDF: ' + txt); return; }
             const blob = await resp.blob();
-            if (preview){
+                if (preview){
                 const url = window.URL.createObjectURL(blob);
                 // remove existing preview if any
                 const existing = document.getElementById('pdf-preview-modal'); if (existing) existing.remove();
