@@ -198,4 +198,24 @@ def process_retornos_csv(contents: bytes, account: Optional[str] = None) -> List
         cr = {k: _clean(v) for k, v in r.items()}
         clean_results.append(cr)
 
-    return {'rows': clean_results, 'count': len(clean_results), 'informe': clean_summaries, 'snapshots': clean_snapshots}
+    # derive benchmarks from any accounts that include 'BMK' in the Account name
+    benchmarks = []
+    try:
+        if 'Account' in df.columns and 'TWRR' in df.columns:
+            bmk_df = df[df['Account'].str.contains('BMK', case=False, na=False)]
+            for acct, g in bmk_df.groupby('Account'):
+                latest = g.sort_values('End Date').iloc[-1]
+                benchmarks.append({
+                    'Account': acct,
+                    'Date': latest['End Date'].strftime('%Y-%m-%d') if not pd.isnull(latest['End Date']) else None,
+                    'TWRR': float(latest['TWRR']) if 'TWRR' in latest and not pd.isnull(latest['TWRR']) else None,
+                })
+    except Exception:
+        benchmarks = []
+
+    clean_benchmarks = []
+    for b in benchmarks:
+        cb = {k: _clean(v) for k, v in b.items()}
+        clean_benchmarks.append(cb)
+
+    return {'rows': clean_results, 'count': len(clean_results), 'informe': clean_summaries, 'snapshots': clean_snapshots, 'benchmarks': clean_benchmarks}
