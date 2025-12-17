@@ -7,6 +7,9 @@ import uvicorn
 from pathlib import Path
 from src.processing import process_retornos_csv
 from src.visuals import generate_informe_images
+from src.pdfgen import generate_pdf
+from fastapi.responses import StreamingResponse, JSONResponse
+
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -61,6 +64,90 @@ async def retornos(file: UploadFile = File(...), account: Optional[str] = Form(N
         return {**results, 'images': images, 'snapshot_images': snapshot_images}
     finally:
         await file.close()
+
+
+@app.post('/retornos/pdf')
+async def retornos_pdf(selected_date: str = Form(...), file: UploadFile = File(None)):
+    """Genera un PDF con la tabla de comparación para la fecha seleccionada.
+
+    - selected_date: fecha elegida en el selector
+    - file: (opcional) archivo CSV si se desea re-subir; si no se envía se usa el archivo local
+    """
+    try:
+        if file and file.filename:
+            contents = await file.read()
+            results = process_retornos_csv(contents)
+            await file.close()
+        else:
+            local_csv = BASE_DIR.parent / 'RetornosV21_test.csv'
+            if not local_csv.exists():
+                local_csv = BASE_DIR.parent / 'RetornosV21.csv'
+            if not local_csv.exists():
+                return JSONResponse(status_code=404, content={"detail": "Archivo local no encontrado para generar PDF"})
+            contents = local_csv.read_bytes()
+            results = process_retornos_csv(contents)
+
+        pdf_bytes = generate_pdf(results, selected_date)
+        return StreamingResponse(iter([pdf_bytes]), media_type='application/pdf', headers={"Content-Disposition": f"attachment; filename=Informe_{selected_date}.pdf"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+@app.post('/retornos/email')
+async def retornos_email(
+    selected_date: str = Form(...),
+    smtp_server: str = Form('smtp.office365.com'),
+    smtp_port: int = Form(587),
+    smtp_user: str = Form(...),
+    smtp_pass: str = Form(...),
+    to_email: str = Form(...),
+    subject: Optional[str] = Form(None),
+    body: Optional[str] = Form(None),
+    file: UploadFile = File(None),
+):
+    """Genera el PDF y envía por SMTP usando credenciales proporcionadas en tiempo de ejecución.
+
+    Nota: las credenciales NO se guardan en servidor.
+    """
+    import smtplib
+    from email.message import EmailMessage
+
+    try:
+        # obtain results from uploaded file or local
+        if file and file.filename:
+            contents = await file.read()
+            results = process_retornos_csv(contents)
+            await file.close()
+        else:
+            local_csv = BASE_DIR.parent / 'RetornosV21_test.csv'
+            if not local_csv.exists():
+                local_csv = BASE_DIR.parent / 'RetornosV21.csv'
+            if not local_csv.exists():
+                return JSONResponse(status_code=404, content={"detail": "Archivo local no encontrado para generar PDF"})
+            contents = local_csv.read_bytes()
+            results = process_retornos_csv(contents)
+
+        pdf_bytes = generate_pdf(results, selected_date)
+
+        # compose email
+        msg = EmailMessage()
+        msg['Subject'] = subject or f'Informe Retornos {selected_date}'
+        msg['From'] = smtp_user
+        msg['To'] = to_email
+        msg.set_content(body or 'Adjunto se encuentra el informe de retornos.')
+
+        msg.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename=f'Informe_{selected_date}.pdf')
+
+        # connect to SMTP and send
+        server = smtplib.SMTP(smtp_server, int(smtp_port), timeout=20)
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+        server.quit()
+
+        return JSONResponse(status_code=200, content={"detail": "Correo enviado"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
 
 
 @app.get('/retornos/local')

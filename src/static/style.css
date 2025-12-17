@@ -33,6 +33,17 @@ table.results{border-collapse:collapse;width:100%;font-size:13px}
 table.results th, table.results td{border-bottom:1px solid #eef2f6;padding:10px;text-align:left}
 table.results th{background:transparent;color:#6b7a93;font-weight:700}
 .informe-title{display:flex;justify-content:space-between;align-items:center}
+
+/* styled table variants */
+table.results.styled{border-radius:8px;overflow:hidden;background:linear-gradient(#fff,#fbfdff)}
+table.results.styled tbody tr:nth-child(odd){background:#ffffff}
+table.results.styled tbody tr:nth-child(even){background:#fbfcff}
+.diff-cell{font-weight:700}
+.diff-pct{font-weight:700}
+.diff-cell.positive{color:#0b7b0b}
+.diff-cell.negative{color:#c22929}
+.diff-pct.positive{color:#0b7b0b}
+.diff-pct.negative{color:#c22929}
 .footer{max-width:1200px;margin:40px auto 60px;padding:10px 20px;color:#7a8aa1;font-size:13px}
 
 @media(max-width:900px){.grid{grid-template-columns:1fr}.header{padding:14px}}
