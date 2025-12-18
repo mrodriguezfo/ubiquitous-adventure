@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Informe - Retornos FLAR</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .report-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+        .kpis{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+        .kpi{background:#fff;padding:12px;border-radius:8px;box-shadow:0 0 0 1px rgba(0,0,0,0.03);min-width:160px}
+        .results table{width:100%;border-collapse:collapse}
+        .results th,.results td{padding:8px;border-bottom:1px solid #eee}
+        .positive{color:green}
+        .negative{color:red}
+        .images-grid{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+        .images-grid img{max-width:48%;height:auto;border:1px solid #eee;padding:6px;border-radius:6px;background:#fff}
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="brand">
+            <div class="logo">FL</div>
+            <div>
+                <h1>Informe - Valor de Mercado</h1>
+                <div class="meta">Fecha: {{ selected_date }}</div>
+            </div>
+        </div>
+    </header>
+    <main class="container">
+        <section class="card">
+            <div class="report-header">
+                <div>
+                    <h2>Resumen por portafolio</h2>
+                    <div class="meta">Generado desde la aplicación Retornos</div>
+                </div>
+            </div>
+
+            <div class="kpis">
+                {% for s in informe[:6] %}
+                <div class="kpi">
+                    <div style="font-weight:600">{{ s.Account }}</div>
+                    <div style="font-size:14px">Valor: {{ s['Total Market Value'] | default('') }}</div>
+                    <div style="font-size:12px;color:#666">Earnings: {{ s['Total Earnings'] | default('') }}</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="images-grid">
+                {% for img in images %}
+                    <img src="{{ img }}" alt="visual"/>
+                {% endfor %}
+            </div>
+
+            <h3 style="margin-top:18px">Detalle - Snapshots</h3>
+            <div class="results">
+                <table>
+                    <thead>
+                        <tr><th>Portafolio</th><th>PrevMonthEnd</th><th>PrevMarketValue</th><th>LastDate</th><th>LastMarketValue</th><th>Diff</th><th>%</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for sp in snapshots %}
+                        <tr>
+                            <td>{{ sp.Account }}</td>
+                            <td>{{ sp.PrevMonthEnd }}</td>
+                            <td>{{ sp.PrevMarketValue }}</td>
+                            <td>{{ sp.LastDate }}</td>
+                            <td>{{ sp.LastMarketValue }}</td>
+                            <td>{{ sp.Diff }}</td>
+                            <td>{{ sp.PctDiff }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+        </section>
+    </main>
+    <footer class="footer">FLAR - Informe navegable</footer>
+</body>
+</html>

@@ -67,12 +67,13 @@ async def retornos(file: UploadFile = File(...), account: Optional[str] = Form(N
 
 
 @app.post('/retornos/pdf')
-async def retornos_pdf(selected_date: str = Form(...), file: UploadFile = File(None)):
+async def retornos_pdf(request: Request, selected_date: str = Form(...), file: UploadFile = File(None)):
     """Genera un PDF con la tabla de comparación para la fecha seleccionada.
 
-    - selected_date: fecha elegida en el selector
-    - file: (opcional) archivo CSV si se desea re-subir; si no se envía se usa el archivo local
+    This endpoint also supports generating an HTML navigable report instead of PDF
+    by passing ?format=html (returns rendered HTML template).
     """
+    fmt = request.query_params.get('format', 'pdf')
     try:
         if file and file.filename:
             contents = await file.read()
@@ -83,9 +84,17 @@ async def retornos_pdf(selected_date: str = Form(...), file: UploadFile = File(N
             if not local_csv.exists():
                 local_csv = BASE_DIR.parent / 'RetornosV21.csv'
             if not local_csv.exists():
-                return JSONResponse(status_code=404, content={"detail": "Archivo local no encontrado para generar PDF"})
+                return JSONResponse(status_code=404, content={"detail": "Archivo local no encontrado para generar PDF/HTML"})
             contents = local_csv.read_bytes()
             results = process_retornos_csv(contents)
+
+        if fmt == 'html':
+            # Render the navigable HTML report using templates/report.html
+            context = {"request": request, 'selected_date': selected_date}
+            context.update(results)
+            # ensure images exist in results
+            context['images'] = results.get('images', [])
+            return templates.TemplateResponse('report.html', context)
 
         pdf_bytes = generate_pdf(results, selected_date)
         return StreamingResponse(iter([pdf_bytes]), media_type='application/pdf', headers={"Content-Disposition": f"attachment; filename=Informe_{selected_date}.pdf"})
