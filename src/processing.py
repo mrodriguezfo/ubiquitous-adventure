@@ -16,25 +16,56 @@ def process_retornos_csv(contents: bytes, account: Optional[str] = None) -> List
     """
     # Leer como texto con encoding cp1252 (1252) similar al PowerQuery
     text = contents.decode('cp1252', errors='replace')
-    # Detectar delimitador (coma o punto y coma u otro) en la línea de encabezado (después de saltar 5 filas)
     lines = text.splitlines()
+    # Try to locate the header row. Some files (PowerQuery output) skip 5 rows,
+    # but uploaded CSVs may have header on the first line. Search first 10 lines
+    # for a line that contains expected header names (e.g. 'Account').
+    header_idx = None
     header_line = ''
-    if len(lines) > 5:
-        header_line = lines[5]
-    else:
-        header_line = '\n'.join(lines)
-
-    # Intentar detectar delimitador con csv.Sniffer
-    dialect = None
+    for i, ln in enumerate(lines[:10]):
+        if 'Account' in ln and ('Total' in ln or 'Total Market' in ln or 'End Date' in ln):
+            header_idx = i
+            header_line = ln
+            break
+    if header_idx is None:
+        # default to PowerQuery behavior (skip 5 rows) if enough lines exist,
+        # otherwise assume header is first line
+        if len(lines) > 5:
+            header_idx = 5
+            header_line = lines[5]
+        else:
+            header_idx = 0
+            header_line = lines[0] if lines else ''
+    # Detect delimiter using csv.Sniffer on the detected header_line
     try:
         sniffer = csv.Sniffer()
-        dialect = sniffer.sniff(header_line)
-        sep = dialect.delimiter
+        dialect = sniffer.sniff(header_line) if header_line else None
+        sep = dialect.delimiter if dialect else ','
     except Exception:
         sep = ','
+    # Read with pandas using the detected header row index.
+    # Be defensive: uploaded files may not match PowerQuery output. Try multiple fallbacks
+    # before giving up.
+    if not text.strip():
+        # empty content
+        return {'rows': [], 'count': 0, 'informe': [], 'snapshots': [], 'benchmarks': []}
 
-    # Leer con pandas usando el delimitador detectado
-    df = pd.read_csv(io.StringIO(text), skiprows=5, header=0, sep=sep, encoding='cp1252', engine='python')
+    try:
+        df = pd.read_csv(io.StringIO(text), skiprows=header_idx, header=0, sep=sep, encoding='cp1252', engine='python')
+    except Exception:
+        # try reading without skipping rows (header at top)
+        try:
+            df = pd.read_csv(io.StringIO(text), header=0, sep=',', encoding='cp1252', engine='python')
+        except Exception:
+            # final fallback: let pandas infer delimiter with default engine
+            try:
+                df = pd.read_csv(io.StringIO(text), header=0, encoding='cp1252')
+            except Exception:
+                # can't parse file
+                raise
+    # If df has no columns (sometimes pandas returns empty), raise a clear error
+    if df is None or df.shape[1] == 0:
+        raise pd.errors.EmptyDataError('No columns parsed from uploaded CSV')
 
     # Normalizar columnas: rename to known names if present
     expected = ["Account", "Begin Date", "End Date", "Perf. Class", "Settlement Date Cash Balance", "Total Market Value", "TWRR", "TWRR M-T-D", "TWRR Y-T-D", "TWRR 3 month", "TWRR 1 yr.", "TWRR 3 yr. Ann.", "TWRR Incept. Ann.", "TWRR w/ Fees", "TWRR w/Fees M-T-D", "TWRR w/Fees Y-T-D", "Total Earnings"]
