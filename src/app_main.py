@@ -35,18 +35,38 @@ async def index(request: Request):
 
 
 @app.post("/retornos")
-async def retornos(file: UploadFile = File(...), account: Optional[str] = Form(None)):
+async def retornos(
+    file: UploadFile = File(...),
+    control_file: UploadFile = File(None),
+    query_file: UploadFile = File(None),
+    account: Optional[str] = Form(None)
+):
     """Procesa un CSV de retornos y devuelve las filas filtradas y transformadas.
 
     - file: CSV con formato similar a RetornosV21.csv (PowerQuery salteaba 5 filas y promovía encabezados)
+    - control_file: (opcional) CSV similar a ControlReporte1.csv usado en PowerQuery
+    - query_file: (opcional) CSV con datos equivalentes al resultado de la consulta SQL (Query1)
     - account: (opcional) filtro para la columna 'Account'
     """
-    if not file.filename.lower().endswith(('.csv', '.txt')):
-        raise HTTPException(status_code=400, detail="Se requiere un archivo CSV")
+    if not file or not file.filename.lower().endswith(('.csv', '.txt')):
+        raise HTTPException(status_code=400, detail="Se requiere un archivo CSV principal (Retornos)")
 
+    support_files = {}
     try:
         contents = await file.read()
-        results = process_retornos_csv(contents, account=account)
+        # read optional support files
+        if control_file and control_file.filename:
+            try:
+                support_files['control'] = await control_file.read()
+            finally:
+                await control_file.close()
+        if query_file and query_file.filename:
+            try:
+                support_files['query'] = await query_file.read()
+            finally:
+                await query_file.close()
+
+        results = process_retornos_csv(contents, account=account, support_files=support_files)
         # processing returns dict with rows/count/informe and snapshots
         images = []
         try:
@@ -67,7 +87,13 @@ async def retornos(file: UploadFile = File(...), account: Optional[str] = Form(N
 
 
 @app.post('/retornos/pdf')
-async def retornos_pdf(request: Request, selected_date: str = Form(...), file: UploadFile = File(None)):
+async def retornos_pdf(
+    request: Request,
+    selected_date: str = Form(...),
+    file: UploadFile = File(None),
+    control_file: UploadFile = File(None),
+    query_file: UploadFile = File(None),
+):
     """Genera un PDF con la tabla de comparación para la fecha seleccionada.
 
     This endpoint also supports generating an HTML navigable report instead of PDF
@@ -75,9 +101,9 @@ async def retornos_pdf(request: Request, selected_date: str = Form(...), file: U
     """
     fmt = request.query_params.get('format', 'pdf')
     try:
+        support_files = {}
         if file and file.filename:
             contents = await file.read()
-            results = process_retornos_csv(contents)
             await file.close()
         else:
             local_csv = BASE_DIR.parent / 'RetornosV21_test.csv'
@@ -86,7 +112,26 @@ async def retornos_pdf(request: Request, selected_date: str = Form(...), file: U
             if not local_csv.exists():
                 return JSONResponse(status_code=404, content={"detail": "Archivo local no encontrado para generar PDF/HTML"})
             contents = local_csv.read_bytes()
-            results = process_retornos_csv(contents)
+
+        # optional support files from upload
+        if control_file and control_file.filename:
+            support_files['control'] = await control_file.read()
+            await control_file.close()
+        else:
+            # try repo-local fallback
+            local_control = BASE_DIR.parent / 'ControlReporte1.csv'
+            if local_control.exists():
+                support_files['control'] = local_control.read_bytes()
+
+        if query_file and query_file.filename:
+            support_files['query'] = await query_file.read()
+            await query_file.close()
+        else:
+            local_query = BASE_DIR.parent / 'Query1.csv'
+            if local_query.exists():
+                support_files['query'] = local_query.read_bytes()
+
+        results = process_retornos_csv(contents, support_files=support_files)
 
         if fmt == 'html':
             # Render the navigable HTML report using templates/report.html

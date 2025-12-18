@@ -6,7 +6,7 @@ from typing import List, Optional
 import pandas as pd
 
 
-def process_retornos_csv(contents: bytes, account: Optional[str] = None) -> List[dict]:
+def process_retornos_csv(contents: bytes, account: Optional[str] = None, support_files: Optional[dict] = None) -> dict:
     """Replicar la transformación de PowerQuery para RetornosV21.csv
 
     - Saltea 5 filas iniciales
